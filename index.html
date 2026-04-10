@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Invoice Sender - Firebase + Excel Table</title>
+  <title>FBR Invoice Sender - Live API</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
@@ -23,7 +23,7 @@
     }
     .btn-primary { background: #1e3a8a; color: white; }
     .btn-success { background: #15803d; color: white; }
-    .btn-danger { background: #dc2626; color: white; }
+    .btn-download { background: #7c3aed; color: white; padding: 12px 20px; font-size: 1.05em; }
 
     table {
       width: 100%; border-collapse: collapse; margin-top: 10px; background: white;
@@ -34,37 +34,39 @@
     }
     th { background: #1e3a8a; color: white; }
     tr:hover { background: #f1f5f9; }
-    .json-preview {
-      background: #1f2937; color: #e0f2fe; padding: 12px; border-radius: 6px;
-      font-family: monospace; font-size: 0.85em; max-height: 200px; overflow: auto; margin-top: 8px;
-    }
+
     .status { padding: 10px; border-radius: 6px; margin: 10px 0; font-weight: bold; }
     .success { background: #dcfce7; color: #166534; }
     .error { background: #fee2e2; color: #991b1b; }
-    .response { background: #1f2937; color: #e0f2fe; padding: 15px; border-radius: 8px; min-height: 300px; font-family: monospace; white-space: pre-wrap; overflow: auto; }
+    .response { 
+      background: #1f2937; color: #e0f2fe; padding: 15px; border-radius: 8px; 
+      min-height: 300px; font-family: monospace; white-space: pre-wrap; overflow: auto; 
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <header>📤 Invoice Sender to Firebase (with Excel Table View)</header>
+    <header>📤 FBR Invoice Sender (Live API)</header>
     
     <div class="main">
       <!-- Sidebar -->
       <div class="sidebar">
-        <h2>Firebase Settings</h2>
+        <h2>FBR API Settings</h2>
+        
         <div class="form-group">
-          <label>Firebase Database URL</label>
-          <input type="text" id="firebaseUrl" value="https://n0t3p4d-plu5-default-rtdb.firebaseio.com" readonly />
+          <label>API Endpoint (URL)</label>
+          <input type="text" id="apiUrl" value="https://gw.fbr.gov.pk/imsp/v1/api/Live/PostData" />
         </div>
+        
         <div class="form-group">
-          <label>Path / Node Name</label>
-          <input type="text" id="path" value="invoices" />
+          <label>Authorization Token</label>
+          <input type="text" id="apiToken" value="15f0b463-b638-3f63-a671-a799fb380468" />
         </div>
 
         <hr style="margin: 20px 0;">
 
         <h3>📊 Import Excel File</h3>
-        <p><small>Column A = Invoice / Transaction Number<br>Column B = Full JSON String (from Row 2 downwards)</small></p>
+        <p><small>Column A = Transaction Number<br>Column B = Full JSON String (Invoice Data)</small></p>
         
         <input type="file" id="excelFile" accept=".xlsx,.xls" style="margin:10px 0;" />
         <button class="btn-success" onclick="processExcel()">Import & Show Table</button>
@@ -77,13 +79,19 @@
         <h2>Imported Records Table</h2>
         <div id="tableContainer" style="margin-top: 15px;"></div>
 
-        <h2 style="margin-top: 30px;">Firebase Response / Log</h2>
+        <div style="margin: 25px 0 15px 0;">
+          <button class="btn-download" onclick="downloadRecords()" id="downloadBtn" style="display:none;">
+            📥 Download Complete Records (Excel)
+          </button>
+        </div>
+
+        <h2 style="margin-top: 30px;">FBR API Response / Log</h2>
         <div id="status" class="status"></div>
-        <pre id="response" class="response">Import Excel file to see records and send to Firebase...</pre>
+        <pre id="response" class="response">Import Excel file then click Send to FBR...</pre>
 
         <div style="margin-top: 20px;">
-          <button class="btn-primary" onclick="sendAllToFirebase()" style="padding:12px 24px; font-size:1.1em;">
-            🚀 Send All Records to Firebase
+          <button class="btn-primary" onclick="sendAllToFBR()" style="padding:12px 24px; font-size:1.1em;">
+            🚀 Send All Records to FBR
           </button>
         </div>
       </div>
@@ -91,7 +99,7 @@
   </div>
 
   <script>
-    let allRecords = []; // Will store { invoiceNo, transactionNo, jsonObj }
+    let allRecords = []; 
 
     function showStatus(msg, type = "") {
       const statusDiv = document.getElementById("status");
@@ -99,7 +107,7 @@
       statusDiv.className = `status ${type}`;
     }
 
-    // ==================== PROCESS EXCEL & SHOW TABLE ====================
+    // ==================== PROCESS EXCEL ====================
     function processExcel() {
       const file = document.getElementById("excelFile").files[0];
       if (!file) return alert("Please select an Excel file!");
@@ -118,20 +126,20 @@
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Invoice / Transaction Number (Col A)</th>
+                  <th>Transaction Number</th>
+                  <th>Invoice ID / USIN</th>
                   <th>JSON Status</th>
-                  <th>USIN / Invoice ID</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>`;
 
-          for (let i = 1; i < rows.length; i++) { // Start from Row 2 (index 1)
+          for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
-            if (!row || !row[1]) continue; // Skip if Column B is empty
+            if (!row || !row[1]) continue;
 
-            let invoiceNo = row[0] ? row[0].toString().trim() : "N/A";     // Column A
-            let jsonStr = row[1].toString().trim();                        // Column B
+            let transactionNo = row[0] ? row[0].toString().trim() : "N/A";
+            let jsonStr = row[1].toString().trim();
 
             let jsonObj = null;
             let statusText = "❌ Invalid JSON";
@@ -140,37 +148,34 @@
             try {
               jsonObj = JSON.parse(jsonStr);
               statusText = "✅ Valid JSON";
-              usin = jsonObj.USIN || jsonObj.InvoiceNumber || "Not Found";
-            } catch (err) {
-              statusText = "❌ Invalid JSON";
-            }
+              usin = jsonObj.USIN || jsonObj.InvoiceNumber || jsonObj.invoiceNumber || "Not Found";
+            } catch (err) {}
 
             allRecords.push({
-              invoiceNo: invoiceNo,
+              transactionNo: transactionNo,
+              usin: usin,
               jsonObj: jsonObj,
-              rowIndex: i + 1
+              rowIndex: i + 1,
+              fbrResponse: null
             });
 
             html += `
               <tr>
                 <td>${i}</td>
-                <td><strong>${invoiceNo}</strong></td>
-                <td>${statusText}</td>
+                <td><strong>${transactionNo}</strong></td>
                 <td>${usin}</td>
-                <td>
-                  <button onclick="viewJson(${allRecords.length - 1})" style="padding:5px 10px; font-size:0.85em;">View JSON</button>
-                </td>
+                <td>${statusText}</td>
+                <td><button onclick="viewJson(${allRecords.length - 1})" style="padding:5px 10px; font-size:0.85em;">View JSON</button></td>
               </tr>`;
           }
 
           html += `</tbody></table>`;
           document.getElementById("tableContainer").innerHTML = html;
-
           document.getElementById("excelStatus").style.display = "block";
-          document.getElementById("excelStatus").innerHTML = 
-            `✅ <b>${allRecords.length}</b> records loaded successfully from Excel`;
+          document.getElementById("excelStatus").innerHTML = `✅ <b>${allRecords.length}</b> records loaded successfully`;
 
-          showStatus(`${allRecords.length} records ready to send to Firebase`, "success");
+          showStatus(`${allRecords.length} records ready to send to FBR`, "success");
+          document.getElementById("downloadBtn").style.display = "inline-block";
 
         } catch (err) {
           alert("Error reading Excel: " + err.message);
@@ -179,65 +184,98 @@
       reader.readAsArrayBuffer(file);
     }
 
-    // View JSON in response area
     function viewJson(index) {
       const record = allRecords[index];
-      if (!record || !record.jsonObj) {
-        document.getElementById("response").textContent = "Invalid JSON in this row.";
-        return;
-      }
-
-      const prettyJson = JSON.stringify(record.jsonObj, null, 2);
+      if (!record || !record.jsonObj) return;
+      const pretty = JSON.stringify(record.jsonObj, null, 2);
       document.getElementById("response").textContent = 
-        `Invoice / Transaction: ${record.invoiceNo}\n\n${prettyJson}`;
+        `Transaction: ${record.transactionNo}\nInvoice ID: ${record.usin}\n\n${pretty}`;
     }
 
-    // ==================== SEND ALL TO FIREBASE ====================
-    async function sendAllToFirebase() {
-      if (allRecords.length === 0) {
-        alert("No records to send! Import Excel first.");
+    // ==================== DOWNLOAD RECORDS AS EXCEL ====================
+    function downloadRecords() {
+      if (allRecords.length === 0) return alert("No records to download!");
+
+      const exportData = allRecords.map((r, i) => ({
+        "Sr No": i + 1,
+        "Invoice Number / USIN": r.usin,
+        "Transaction Number": r.transactionNo,
+        "FBR Response": r.fbrResponse || "Not Sent",
+        "Status": r.jsonObj ? "Valid JSON" : "Invalid JSON",
+        "Row in Original Excel": r.rowIndex
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "FBR_Invoice_Records");
+
+      const wscols = [{wch:8}, {wch:25}, {wch:20}, {wch:40}, {wch:15}, {wch:18}];
+      ws['!cols'] = wscols;
+
+      XLSX.writeFile(wb, `FBR_Invoice_Records_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    // ==================== SEND TO FBR API ====================
+    async function sendAllToFBR() {
+      if (allRecords.length === 0) return alert("No records to send!");
+
+      const apiUrl = document.getElementById("apiUrl").value.trim();
+      const token = document.getElementById("apiToken").value.trim();
+
+      if (!apiUrl || !token) {
+        alert("API URL and Token are required!");
         return;
       }
 
-      const path = document.getElementById("path").value.trim() || "invoices";
-      const baseUrl = `https://n0t3p4d-plu5-default-rtdb.firebaseio.com/${path}.json`;
-
       const responseDiv = document.getElementById("response");
-      responseDiv.textContent = "🚀 Sending records to Firebase...\n\n";
+      responseDiv.textContent = "🚀 Sending records to FBR Live API...\n\n";
 
       let successCount = 0;
 
       for (let i = 0; i < allRecords.length; i++) {
         const record = allRecords[i];
         if (!record.jsonObj) {
-          responseDiv.textContent += `Skipping Row ${record.rowIndex} (Invalid JSON)\n`;
+          responseDiv.textContent += `❌ Row ${record.rowIndex} - Invalid JSON\n`;
           continue;
         }
 
-        responseDiv.textContent += `Sending ${i+1}/${allRecords.length} → Invoice: ${record.invoiceNo}\n`;
+        responseDiv.textContent += `Sending ${i+1}/${allRecords.length} → Transaction: ${record.transactionNo} | Invoice: ${record.usin}\n`;
 
         try {
-          const res = await fetch(baseUrl, {
+          const res = await fetch(apiUrl, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
             body: JSON.stringify(record.jsonObj)
           });
 
+          const resultText = await res.text();
+          let result;
+          try {
+            result = JSON.parse(resultText);
+          } catch (e) {
+            result = resultText;
+          }
+
+          record.fbrResponse = res.ok ? "Success" : "Failed";
+
           if (res.ok) {
-            const result = await res.json();
             successCount++;
-            responseDiv.textContent += `   ✅ Success - Firebase Key: ${result.name}\n`;
+            responseDiv.textContent += `   ✅ Success → ${JSON.stringify(result).slice(0, 150)}...\n`;
           } else {
-            responseDiv.textContent += `   ❌ Failed (HTTP ${res.status})\n`;
+            responseDiv.textContent += `   ❌ Failed (HTTP ${res.status}) → ${resultText.slice(0, 200)}\n`;
           }
         } catch (err) {
-          responseDiv.textContent += `   ❌ Error: ${err.message}\n`;
+          record.fbrResponse = "Error";
+          responseDiv.textContent += `   ❌ Network Error: ${err.message}\n`;
         }
 
-        await new Promise(r => setTimeout(r, 700)); // Avoid rate limiting
+        await new Promise(r => setTimeout(r, 800)); // Delay to avoid rate limiting
       }
 
-      showStatus(`✅ ${successCount} out of ${allRecords.length} records successfully sent to Firebase!`, "success");
+      showStatus(`✅ ${successCount} out of ${allRecords.length} records sent to FBR`, "success");
       responseDiv.textContent += `\n\n🎉 Process Completed! Total Successful: ${successCount}`;
     }
   </script>
