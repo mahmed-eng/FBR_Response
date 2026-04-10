@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Invoice Sender - Firebase + Excel Table</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+    body { background: #f4f6f9; padding: 20px; }
+    .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; }
+    header { background: #1e3a8a; color: white; padding: 15px 25px; font-size: 1.5em; font-weight: bold; }
+    .main { display: flex; height: calc(100vh - 80px); }
+    .sidebar { width: 480px; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; background: #fafcff; }
+    .content { flex: 1; padding: 20px; overflow-y: auto; background: #f8fafc; }
+
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 6px; font-weight: 600; color: #333; }
+    input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+
+    button {
+      padding: 10px 16px; margin: 5px 2px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
+    }
+    .btn-primary { background: #1e3a8a; color: white; }
+    .btn-success { background: #15803d; color: white; }
+    .btn-danger { background: #dc2626; color: white; }
+
+    table {
+      width: 100%; border-collapse: collapse; margin-top: 10px; background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    th, td {
+      padding: 12px 10px; text-align: left; border-bottom: 1px solid #ddd;
+    }
+    th { background: #1e3a8a; color: white; }
+    tr:hover { background: #f1f5f9; }
+    .json-preview {
+      background: #1f2937; color: #e0f2fe; padding: 12px; border-radius: 6px;
+      font-family: monospace; font-size: 0.85em; max-height: 200px; overflow: auto; margin-top: 8px;
+    }
+    .status { padding: 10px; border-radius: 6px; margin: 10px 0; font-weight: bold; }
+    .success { background: #dcfce7; color: #166534; }
+    .error { background: #fee2e2; color: #991b1b; }
+    .response { background: #1f2937; color: #e0f2fe; padding: 15px; border-radius: 8px; min-height: 300px; font-family: monospace; white-space: pre-wrap; overflow: auto; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>📤 Invoice Sender to Firebase (with Excel Table View)</header>
+    
+    <div class="main">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <h2>Firebase Settings</h2>
+        <div class="form-group">
+          <label>Firebase Database URL</label>
+          <input type="text" id="firebaseUrl" value="https://n0t3p4d-plu5-default-rtdb.firebaseio.com" readonly />
+        </div>
+        <div class="form-group">
+          <label>Path / Node Name</label>
+          <input type="text" id="path" value="invoices" />
+        </div>
+
+        <hr style="margin: 20px 0;">
+
+        <h3>📊 Import Excel File</h3>
+        <p><small>Column A = Invoice / Transaction Number<br>Column B = Full JSON String (from Row 2 downwards)</small></p>
+        
+        <input type="file" id="excelFile" accept=".xlsx,.xls" style="margin:10px 0;" />
+        <button class="btn-success" onclick="processExcel()">Import & Show Table</button>
+
+        <div id="excelStatus" style="margin-top:15px; padding:12px; background:#fef3c7; border-radius:6px; display:none;"></div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="content">
+        <h2>Imported Records Table</h2>
+        <div id="tableContainer" style="margin-top: 15px;"></div>
+
+        <h2 style="margin-top: 30px;">Firebase Response / Log</h2>
+        <div id="status" class="status"></div>
+        <pre id="response" class="response">Import Excel file to see records and send to Firebase...</pre>
+
+        <div style="margin-top: 20px;">
+          <button class="btn-primary" onclick="sendAllToFirebase()" style="padding:12px 24px; font-size:1.1em;">
+            🚀 Send All Records to Firebase
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allRecords = []; // Will store { invoiceNo, transactionNo, jsonObj }
+
+    function showStatus(msg, type = "") {
+      const statusDiv = document.getElementById("status");
+      statusDiv.textContent = msg;
+      statusDiv.className = `status ${type}`;
+    }
+
+    // ==================== PROCESS EXCEL & SHOW TABLE ====================
+    function processExcel() {
+      const file = document.getElementById("excelFile").files[0];
+      if (!file) return alert("Please select an Excel file!");
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+          allRecords = [];
+          let html = `
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Invoice / Transaction Number (Col A)</th>
+                  <th>JSON Status</th>
+                  <th>USIN / Invoice ID</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>`;
+
+          for (let i = 1; i < rows.length; i++) { // Start from Row 2 (index 1)
+            const row = rows[i];
+            if (!row || !row[1]) continue; // Skip if Column B is empty
+
+            let invoiceNo = row[0] ? row[0].toString().trim() : "N/A";     // Column A
+            let jsonStr = row[1].toString().trim();                        // Column B
+
+            let jsonObj = null;
+            let statusText = "❌ Invalid JSON";
+            let usin = "N/A";
+
+            try {
+              jsonObj = JSON.parse(jsonStr);
+              statusText = "✅ Valid JSON";
+              usin = jsonObj.USIN || jsonObj.InvoiceNumber || "Not Found";
+            } catch (err) {
+              statusText = "❌ Invalid JSON";
+            }
+
+            allRecords.push({
+              invoiceNo: invoiceNo,
+              jsonObj: jsonObj,
+              rowIndex: i + 1
+            });
+
+            html += `
+              <tr>
+                <td>${i}</td>
+                <td><strong>${invoiceNo}</strong></td>
+                <td>${statusText}</td>
+                <td>${usin}</td>
+                <td>
+                  <button onclick="viewJson(${allRecords.length - 1})" style="padding:5px 10px; font-size:0.85em;">View JSON</button>
+                </td>
+              </tr>`;
+          }
+
+          html += `</tbody></table>`;
+          document.getElementById("tableContainer").innerHTML = html;
+
+          document.getElementById("excelStatus").style.display = "block";
+          document.getElementById("excelStatus").innerHTML = 
+            `✅ <b>${allRecords.length}</b> records loaded successfully from Excel`;
+
+          showStatus(`${allRecords.length} records ready to send to Firebase`, "success");
+
+        } catch (err) {
+          alert("Error reading Excel: " + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // View JSON in response area
+    function viewJson(index) {
+      const record = allRecords[index];
+      if (!record || !record.jsonObj) {
+        document.getElementById("response").textContent = "Invalid JSON in this row.";
+        return;
+      }
+
+      const prettyJson = JSON.stringify(record.jsonObj, null, 2);
+      document.getElementById("response").textContent = 
+        `Invoice / Transaction: ${record.invoiceNo}\n\n${prettyJson}`;
+    }
+
+    // ==================== SEND ALL TO FIREBASE ====================
+    async function sendAllToFirebase() {
+      if (allRecords.length === 0) {
+        alert("No records to send! Import Excel first.");
+        return;
+      }
+
+      const path = document.getElementById("path").value.trim() || "invoices";
+      const baseUrl = `https://n0t3p4d-plu5-default-rtdb.firebaseio.com/${path}.json`;
+
+      const responseDiv = document.getElementById("response");
+      responseDiv.textContent = "🚀 Sending records to Firebase...\n\n";
+
+      let successCount = 0;
+
+      for (let i = 0; i < allRecords.length; i++) {
+        const record = allRecords[i];
+        if (!record.jsonObj) {
+          responseDiv.textContent += `Skipping Row ${record.rowIndex} (Invalid JSON)\n`;
+          continue;
+        }
+
+        responseDiv.textContent += `Sending ${i+1}/${allRecords.length} → Invoice: ${record.invoiceNo}\n`;
+
+        try {
+          const res = await fetch(baseUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(record.jsonObj)
+          });
+
+          if (res.ok) {
+            const result = await res.json();
+            successCount++;
+            responseDiv.textContent += `   ✅ Success - Firebase Key: ${result.name}\n`;
+          } else {
+            responseDiv.textContent += `   ❌ Failed (HTTP ${res.status})\n`;
+          }
+        } catch (err) {
+          responseDiv.textContent += `   ❌ Error: ${err.message}\n`;
+        }
+
+        await new Promise(r => setTimeout(r, 700)); // Avoid rate limiting
+      }
+
+      showStatus(`✅ ${successCount} out of ${allRecords.length} records successfully sent to Firebase!`, "success");
+      responseDiv.textContent += `\n\n🎉 Process Completed! Total Successful: ${successCount}`;
+    }
+  </script>
+</body>
+</html>

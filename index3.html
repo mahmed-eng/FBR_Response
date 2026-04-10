@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Invoice Sender - Firebase</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+    body { background: #f4f6f9; padding: 20px; }
+    .container { max-width: 1300px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; }
+    header { background: #1e3a8a; color: white; padding: 15px 25px; font-size: 1.5em; font-weight: bold; }
+    .main { display: flex; height: calc(100vh - 80px); }
+    .sidebar { width: 420px; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; background: #fafcff; }
+    .content { flex: 1; padding: 20px; overflow-y: auto; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 6px; font-weight: 600; color: #333; }
+    input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+    textarea { height: 160px; font-family: monospace; }
+    button { padding: 10px 16px; margin: 5px 2px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .btn-primary { background: #1e3a8a; color: white; }
+    .btn-success { background: #15803d; color: white; }
+    .btn-danger { background: #dc2626; color: white; }
+    .response { background: #1f2937; color: #e0f2fe; padding: 15px; border-radius: 8px; min-height: 300px; font-family: monospace; white-space: pre-wrap; overflow: auto; }
+    .status { padding: 10px; border-radius: 6px; margin: 10px 0; font-weight: bold; }
+    .success { background: #dcfce7; color: #166534; }
+    .error { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>📤 Invoice Sender → Firebase Realtime Database</header>
+    
+    <div class="main">
+      <div class="sidebar">
+        <h2>Firebase Settings</h2>
+        <div class="form-group">
+          <label>Firebase Database URL</label>
+          <input type="text" id="firebaseUrl" value="https://n0t3p4d-plu5-default-rtdb.firebaseio.com" readonly />
+        </div>
+        <div class="form-group">
+          <label>Path (Node)</label>
+          <input type="text" id="path" value="invoices" />
+        </div>
+
+        <hr>
+
+        <h3>📊 Import from Excel</h3>
+        <p><small>Column B (2nd column) se, Row 2 se neeche tak JSON strings</small></p>
+        <input type="file" id="excelFile" accept=".xlsx,.xls" style="margin:10px 0;" />
+        <button class="btn-success" onclick="processExcel()">Import Excel</button>
+
+        <div id="excelStatus" style="margin-top:15px; padding:12px; background:#fef3c7; border-radius:6px; display:none;"></div>
+        <div id="jsonList" style="margin-top:15px; max-height:350px; overflow-y:auto;"></div>
+
+        <button class="btn-primary" style="margin-top:15px; width:100%;" onclick="sendAllToFirebase()">
+          🚀 Send All Records to Firebase
+        </button>
+      </div>
+
+      <div class="content">
+        <h2>Response / Log</h2>
+        <div id="status" class="status"></div>
+        <pre id="response" class="response">Import Excel aur "Send All to Firebase" button dabayein...</pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allJsonData = [];
+
+    function showStatus(msg, type = "") {
+      const statusDiv = document.getElementById("status");
+      statusDiv.textContent = msg;
+      statusDiv.className = `status ${type}`;
+    }
+
+    // ==================== EXCEL IMPORT ====================
+    function processExcel() {
+      const file = document.getElementById("excelFile").files[0];
+      if (!file) return alert("Please select an Excel file");
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+          allJsonData = [];
+          const listDiv = document.getElementById("jsonList");
+          listDiv.innerHTML = "<strong>✅ Loaded Records:</strong><br><br>";
+
+          for (let i = 1; i < rows.length; i++) {
+            if (rows[i] && rows[i][1]) { // Column B = index 1
+              try {
+                const jsonStr = rows[i][1].toString().trim();
+                const jsonObj = JSON.parse(jsonStr);
+                allJsonData.push(jsonObj);
+
+                const div = document.createElement("div");
+                div.style = "padding:10px; margin:6px 0; background:#f0f9ff; border-radius:6px; cursor:pointer; font-size:0.9em;";
+                div.textContent = `Record ${i+1} → ${jsonObj.USIN || jsonObj.InvoiceNumber || "No USIN"}`;
+                div.onclick = () => testSingleRecord(jsonObj);
+                listDiv.appendChild(div);
+              } catch (err) {
+                console.warn("Invalid JSON at row", i+2);
+              }
+            }
+          }
+
+          document.getElementById("excelStatus").style.display = "block";
+          document.getElementById("excelStatus").innerHTML = 
+            `✅ <b>${allJsonData.length}</b> valid JSON records loaded from Column B (starting Row 2)`;
+
+        } catch (err) {
+          alert("Excel read karne mein error: " + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // Single record test
+    async function testSingleRecord(record) {
+      const path = document.getElementById("path").value.trim() || "invoices";
+      const url = `https://n0t3p4d-plu5-default-rtdb.firebaseio.com/${path}.json`;
+
+      showStatus("Sending test record...", "");
+
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(record)
+        });
+
+        const result = await res.json();
+        document.getElementById("response").textContent = 
+          `✅ Success!\nFirebase Key: ${result.name}\n\n` + 
+          JSON.stringify(result, null, 2);
+
+        showStatus("Test record sent successfully!", "success");
+      } catch (err) {
+        showStatus("Error: " + err.message, "error");
+      }
+    }
+
+    // ==================== SEND ALL TO FIREBASE ====================
+    async function sendAllToFirebase() {
+      if (allJsonData.length === 0) {
+        alert("Pehle Excel import karein!");
+        return;
+      }
+
+      const path = document.getElementById("path").value.trim() || "invoices";
+      const baseUrl = `https://n0t3p4d-plu5-default-rtdb.firebaseio.com/${path}.json`;
+
+      const responseDiv = document.getElementById("response");
+      responseDiv.textContent = "🚀 Sending records to Firebase...\n\n";
+
+      let successCount = 0;
+
+      for (let i = 0; i < allJsonData.length; i++) {
+        const record = allJsonData[i];
+        responseDiv.textContent += `Sending ${i+1}/${allJsonData.length} → ${record.USIN || "No USIN"}\n`;
+
+        try {
+          const res = await fetch(baseUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(record)
+          });
+
+          if (res.ok) {
+            const result = await res.json();
+            successCount++;
+            responseDiv.textContent += `   ✅ Success - Key: ${result.name}\n`;
+          } else {
+            responseDiv.textContent += `   ❌ Failed (Status: ${res.status})\n`;
+          }
+        } catch (err) {
+          responseDiv.textContent += `   ❌ Error: ${err.message}\n`;
+        }
+
+        // Thoda delay to avoid rate limit
+        await new Promise(r => setTimeout(r, 600));
+      }
+
+      showStatus(`✅ ${successCount} out of ${allJsonData.length} records sent to Firebase!`, "success");
+      responseDiv.textContent += `\n\n🎉 Done! Total successful: ${successCount}`;
+    }
+  </script>
+</body>
+</html>
