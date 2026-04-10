@@ -156,7 +156,8 @@
               usin: usin,
               jsonObj: jsonObj,
               rowIndex: i + 1,
-              fbrResponse: null
+              fbrResponse: null,
+              fbrInvoiceNumber: null   // New field for invoice number from response
             });
 
             html += `
@@ -198,8 +199,9 @@
 
       const exportData = allRecords.map((r, i) => ({
         "Sr No": i + 1,
-        "Invoice Number / USIN": r.usin,
         "Transaction Number": r.transactionNo,
+        "Original Invoice / USIN": r.usin,
+        "FBR Invoice Number": r.fbrInvoiceNumber || "Not Received",   // New Column
         "FBR Response": r.fbrResponse || "Not Sent",
         "Status": r.jsonObj ? "Valid JSON" : "Invalid JSON",
         "Row in Original Excel": r.rowIndex
@@ -209,7 +211,10 @@
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "FBR_Invoice_Records");
 
-      const wscols = [{wch:8}, {wch:25}, {wch:20}, {wch:40}, {wch:15}, {wch:18}];
+      const wscols = [
+        {wch:8}, {wch:20}, {wch:25}, {wch:25}, 
+        {wch:40}, {wch:15}, {wch:18}
+      ];
       ws['!cols'] = wscols;
 
       XLSX.writeFile(wb, `FBR_Invoice_Records_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -259,11 +264,20 @@
             result = resultText;
           }
 
+          // Extract Invoice Number from FBR Response
+          let fbrInvoiceNo = null;
+          if (result && typeof result === 'object') {
+            fbrInvoiceNo = result.InvoiceNumber || result.invoiceNumber || 
+                          result.USIN || result.fbrInvoiceNumber || 
+                          result.invoiceNo || null;
+          }
+
           record.fbrResponse = res.ok ? "Success" : "Failed";
+          record.fbrInvoiceNumber = fbrInvoiceNo;
 
           if (res.ok) {
             successCount++;
-            responseDiv.textContent += `   ✅ Success → ${JSON.stringify(result).slice(0, 150)}...\n`;
+            responseDiv.textContent += `   ✅ Success → Invoice: ${fbrInvoiceNo || "N/A"} | ${JSON.stringify(result).slice(0, 120)}...\n`;
           } else {
             responseDiv.textContent += `   ❌ Failed (HTTP ${res.status}) → ${resultText.slice(0, 200)}\n`;
           }
@@ -272,7 +286,7 @@
           responseDiv.textContent += `   ❌ Network Error: ${err.message}\n`;
         }
 
-        await new Promise(r => setTimeout(r, 800)); // Delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 800)); // Delay
       }
 
       showStatus(`✅ ${successCount} out of ${allRecords.length} records sent to FBR`, "success");
