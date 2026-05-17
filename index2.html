@@ -1,164 +1,297 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>API Tester + Excel JSON Import</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FBR Invoice Sender - Live API</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+    body { background: #f4f6f9; padding: 20px; }
+    .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; }
+    header { background: #1e3a8a; color: white; padding: 15px 25px; font-size: 1.5em; font-weight: bold; }
+    .main { display: flex; height: calc(100vh - 80px); }
+    .sidebar { width: 480px; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; background: #fafcff; }
+    .content { flex: 1; padding: 20px; overflow-y: auto; background: #f8fafc; }
 
-<style>
-    body {
-        font-family: Arial;
-        margin: 20px;
-        background: #f5f5f5;
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 6px; font-weight: 600; color: #333; }
+    input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+
+    button {
+      padding: 10px 16px; margin: 5px 2px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
     }
+    .btn-primary { background: #1e3a8a; color: white; }
+    .btn-success { background: #15803d; color: white; }
+    .btn-download { background: #7c3aed; color: white; padding: 12px 20px; font-size: 1.05em; }
 
-    h2 {
-        margin-bottom: 10px;
+    table {
+      width: 100%; border-collapse: collapse; margin-top: 10px; background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
-
-    input, textarea, button {
-        width: 100%;
-        margin-top: 10px;
-        padding: 10px;
-        font-size: 14px;
+    th, td {
+      padding: 12px 10px; text-align: left; border-bottom: 1px solid #ddd;
     }
+    th { background: #1e3a8a; color: white; }
+    tr:hover { background: #f1f5f9; }
 
-    textarea {
-        height: 200px;
-        font-family: monospace;
+    .status { padding: 10px; border-radius: 6px; margin: 10px 0; font-weight: bold; }
+    .success { background: #dcfce7; color: #166534; }
+    .error { background: #fee2e2; color: #991b1b; }
+    .response { 
+      background: #1f2937; color: #e0f2fe; padding: 15px; border-radius: 8px; 
+      min-height: 300px; font-family: monospace; white-space: pre-wrap; overflow: auto; 
     }
-
-    #response {
-        background: #000;
-        color: #0f0;
-        padding: 10px;
-        white-space: pre-wrap;
-        height: 300px;
-        overflow: auto;
-        margin-top: 10px;
-    }
-
-    .container {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-    }
-
-    .box {
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-    }
-</style>
-
+  </style>
 </head>
 <body>
+  <div class="container">
+    <header>📤 FBR Invoice Sender (Live API)</header>
+    
+    <div class="main">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <h2>FBR API Settings</h2>
+        
+        <div class="form-group">
+          <label>API Endpoint (URL)</label>
+          <input type="text" id="apiUrl" value="https://gw.fbr.gov.pk/imsp/v1/api/Live/PostData" />
+        </div>
+        
+        <div class="form-group">
+          <label>Authorization Token</label>
+          <input type="text" id="apiToken" value="15f0b463-b638-3f63-a671-a799fb380468" />
+        </div>
 
-<h2>API Tester (Postman Style)</h2>
+        <hr style="margin: 20px 0;">
 
-<div class="container">
+        <h3>📊 Import Excel File</h3>
+        <p><small>Column A = Transaction Number<br>Column B = Full JSON String (Invoice Data)</small></p>
+        
+        <input type="file" id="excelFile" accept=".xlsx,.xls" style="margin:10px 0;" />
+        <button class="btn-success" onclick="processExcel()">Import & Show Table</button>
 
-    <!-- LEFT SIDE -->
-    <div class="box">
-        <label>API URL</label>
-        <input type="text" id="apiUrl" placeholder="https://example.com/api">
+        <div id="excelStatus" style="margin-top:15px; padding:12px; background:#fef3c7; border-radius:6px; display:none;"></div>
+      </div>
 
-        <label>Bearer Token</label>
-        <input type="text" id="token" placeholder="Enter token">
+      <!-- Main Content -->
+      <div class="content">
+        <h2>Imported Records Table</h2>
+        <div id="tableContainer" style="margin-top: 15px;"></div>
 
-        <label>JSON Body</label>
-        <textarea id="jsonInput"></textarea>
+        <div style="margin: 25px 0 15px 0;">
+          <button class="btn-download" onclick="downloadRecords()" id="downloadBtn" style="display:none;">
+            📥 Download Complete Records (Excel)
+          </button>
+        </div>
 
-        <button onclick="sendRequest()">Send Request</button>
+        <h2 style="margin-top: 30px;">FBR API Response / Log</h2>
+        <div id="status" class="status"></div>
+        <pre id="response" class="response">Import Excel file then click Send to FBR...</pre>
 
-        <h3>Import Excel</h3>
-        <input type="file" id="excelFile" accept=".xlsx" />
+        <div style="margin-top: 20px;">
+          <button class="btn-primary" onclick="sendAllToFBR()" style="padding:12px 24px; font-size:1.1em;">
+            🚀 Send All Records to FBR
+          </button>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <!-- RIGHT SIDE -->
-    <div class="box">
-        <h3>Response</h3>
-        <div id="response">Response will appear here...</div>
-    </div>
+  <script>
+    let allRecords = []; 
 
-</div>
+    function showStatus(msg, type = "") {
+      const statusDiv = document.getElementById("status");
+      statusDiv.textContent = msg;
+      statusDiv.className = `status ${type}`;
+    }
 
-<!-- SheetJS CDN -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    // ==================== PROCESS EXCEL ====================
+    function processExcel() {
+      const file = document.getElementById("excelFile").files[0];
+      if (!file) return alert("Please select an Excel file!");
 
-<script>
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-// ===== SEND API REQUEST =====
-async function sendRequest() {
-    const url = document.getElementById("apiUrl").value;
-    const token = document.getElementById("token").value;
-    const jsonText = document.getElementById("jsonInput").value;
+          allRecords = [];
+          let html = `
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Transaction Number</th>
+                  <th>Invoice ID / USIN</th>
+                  <th>JSON Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>`;
 
-    let responseBox = document.getElementById("response");
+          for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || !row[1]) continue;
 
-    try {
-        const response = await fetch(url, {
+            let transactionNo = row[0] ? row[0].toString().trim() : "N/A";
+            let jsonStr = row[1].toString().trim();
+
+            let jsonObj = null;
+            let statusText = "❌ Invalid JSON";
+            let usin = "N/A";
+
+            try {
+              jsonObj = JSON.parse(jsonStr);
+              statusText = "✅ Valid JSON";
+              usin = jsonObj.USIN || jsonObj.InvoiceNumber || jsonObj.invoiceNumber || "Not Found";
+            } catch (err) {}
+
+            allRecords.push({
+              transactionNo: transactionNo,
+              usin: usin,
+              jsonObj: jsonObj,
+              rowIndex: i + 1,
+              fbrResponse: null,
+              fbrInvoiceNumber: null   // New field for invoice number from response
+            });
+
+            html += `
+              <tr>
+                <td>${i}</td>
+                <td><strong>${transactionNo}</strong></td>
+                <td>${usin}</td>
+                <td>${statusText}</td>
+                <td><button onclick="viewJson(${allRecords.length - 1})" style="padding:5px 10px; font-size:0.85em;">View JSON</button></td>
+              </tr>`;
+          }
+
+          html += `</tbody></table>`;
+          document.getElementById("tableContainer").innerHTML = html;
+          document.getElementById("excelStatus").style.display = "block";
+          document.getElementById("excelStatus").innerHTML = `✅ <b>${allRecords.length}</b> records loaded successfully`;
+
+          showStatus(`${allRecords.length} records ready to send to FBR`, "success");
+          document.getElementById("downloadBtn").style.display = "inline-block";
+
+        } catch (err) {
+          alert("Error reading Excel: " + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function viewJson(index) {
+      const record = allRecords[index];
+      if (!record || !record.jsonObj) return;
+      const pretty = JSON.stringify(record.jsonObj, null, 2);
+      document.getElementById("response").textContent = 
+        `Transaction: ${record.transactionNo}\nInvoice ID: ${record.usin}\n\n${pretty}`;
+    }
+
+    // ==================== DOWNLOAD RECORDS AS EXCEL ====================
+    function downloadRecords() {
+      if (allRecords.length === 0) return alert("No records to download!");
+
+      const exportData = allRecords.map((r, i) => ({
+        "Sr No": i + 1,
+        "Transaction Number": r.transactionNo,
+        "Original Invoice / USIN": r.usin,
+        "FBR Invoice Number": r.fbrInvoiceNumber || "Not Received",   // New Column
+        "FBR Response": r.fbrResponse || "Not Sent",
+        "Status": r.jsonObj ? "Valid JSON" : "Invalid JSON",
+        "Row in Original Excel": r.rowIndex
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "FBR_Invoice_Records");
+
+      const wscols = [
+        {wch:8}, {wch:20}, {wch:25}, {wch:25}, 
+        {wch:40}, {wch:15}, {wch:18}
+      ];
+      ws['!cols'] = wscols;
+
+      XLSX.writeFile(wb, `FBR_Invoice_Records_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    // ==================== SEND TO FBR API ====================
+    async function sendAllToFBR() {
+      if (allRecords.length === 0) return alert("No records to send!");
+
+      const apiUrl = document.getElementById("apiUrl").value.trim();
+      const token = document.getElementById("apiToken").value.trim();
+
+      if (!apiUrl || !token) {
+        alert("API URL and Token are required!");
+        return;
+      }
+
+      const responseDiv = document.getElementById("response");
+      responseDiv.textContent = "🚀 Sending records to FBR Live API...\n\n";
+
+      let successCount = 0;
+
+      for (let i = 0; i < allRecords.length; i++) {
+        const record = allRecords[i];
+        if (!record.jsonObj) {
+          responseDiv.textContent += `❌ Row ${record.rowIndex} - Invalid JSON\n`;
+          continue;
+        }
+
+        responseDiv.textContent += `Sending ${i+1}/${allRecords.length} → Transaction: ${record.transactionNo} | Invoice: ${record.usin}\n`;
+
+        try {
+          const res = await fetch(apiUrl, {
             method: "POST",
             headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + token
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
             },
-            body: jsonText
-        });
+            body: JSON.stringify(record.jsonObj)
+          });
 
-        const data = await response.json();
+          const resultText = await res.text();
+          let result;
+          try {
+            result = JSON.parse(resultText);
+          } catch (e) {
+            result = resultText;
+          }
 
-        responseBox.innerText = JSON.stringify(data, null, 2);
+          // Extract Invoice Number from FBR Response
+          let fbrInvoiceNo = null;
+          if (result && typeof result === 'object') {
+            fbrInvoiceNo = result.InvoiceNumber || result.invoiceNumber || 
+                          result.USIN || result.fbrInvoiceNumber || 
+                          result.invoiceNo || null;
+          }
 
-    } catch (err) {
-        responseBox.innerText = "Error: " + err;
+          record.fbrResponse = res.ok ? "Success" : "Failed";
+          record.fbrInvoiceNumber = fbrInvoiceNo;
+
+          if (res.ok) {
+            successCount++;
+            responseDiv.textContent += `   ✅ Success → Invoice: ${fbrInvoiceNo || "N/A"} | ${JSON.stringify(result).slice(0, 120)}...\n`;
+          } else {
+            responseDiv.textContent += `   ❌ Failed (HTTP ${res.status}) → ${resultText.slice(0, 200)}\n`;
+          }
+        } catch (err) {
+          record.fbrResponse = "Error";
+          responseDiv.textContent += `   ❌ Network Error: ${err.message}\n`;
+        }
+
+        await new Promise(r => setTimeout(r, 800)); // Delay
+      }
+
+      showStatus(`✅ ${successCount} out of ${allRecords.length} records sent to FBR`, "success");
+      responseDiv.textContent += `\n\n🎉 Process Completed! Total Successful: ${successCount}`;
     }
-}
-
-// ===== READ EXCEL =====
-document.getElementById("excelFile").addEventListener("change", handleFile);
-
-function handleFile(e) {
-    const file = e.target.files[0];
-    const reader = new FileReader();
-
-    reader.onload = function(event) {
-        const data = new Uint8Array(event.target.result);
-        const workbook = XLSX.read(data, { type: "array" });
-
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-
-        // Convert sheet to JSON
-        const sheetData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-        let jsonList = [];
-
-        // Column B = index 1
-        for (let i = 1; i < sheetData.length; i++) { // start from row 2
-            let cellValue = sheetData[i][1];
-
-            if (cellValue) {
-                try {
-                    let parsed = JSON.parse(cellValue);
-                    jsonList.push(parsed);
-                } catch (e) {
-                    console.log("Invalid JSON at row:", i + 1);
-                }
-            }
-        }
-
-        // Show first JSON in textarea
-        if (jsonList.length > 0) {
-            document.getElementById("jsonInput").value =
-                JSON.stringify(jsonList[0], null, 2);
-        }
-
-        console.log("All JSON objects:", jsonList);
-    };
-
-    reader.readAsArrayBuffer(file);
-}
-
-</script>
-
+  </script>
 </body>
 </html>
