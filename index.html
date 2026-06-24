@@ -4,430 +4,294 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>FBR Invoice Sender - Live API</title>
-
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
-
     body { background: #f4f6f9; padding: 20px; }
-
-    /* ================= LOGIN SCREEN (ENHANCED ONLY) ================= */
-    #loginScreen {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-      overflow: hidden;
-
-      /* Animated gradient background */
-      background: linear-gradient(-45deg, #0f172a, #1e3a8a, #2563eb, #0ea5e9);
-      background-size: 400% 400%;
-      animation: gradientBG 12s ease infinite;
-    }
-
-    @keyframes gradientBG {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-
-    /* Floating glow circles */
-    #loginScreen::before,
-    #loginScreen::after {
-      content: "";
-      position: absolute;
-      width: 300px;
-      height: 300px;
-      border-radius: 50%;
-      filter: blur(80px);
-      opacity: 0.4;
-      z-index: 0;
-    }
-
-    #loginScreen::before {
-      background: #60a5fa;
-      top: -80px;
-      left: -80px;
-    }
-
-    #loginScreen::after {
-      background: #22c55e;
-      bottom: -100px;
-      right: -100px;
-    }
-
-    .login-box {
-      position: relative;
-      z-index: 1;
-
-      width: 92%;
-      max-width: 380px;
-
-      padding: 35px 28px;
-      border-radius: 18px;
-
-      /* Glass effect */
-      background: rgba(255, 255, 255, 0.12);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-
-      border: 1px solid rgba(255,255,255,0.2);
-
-      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-
-      text-align: center;
-
-      animation: popIn 0.6s ease;
-    }
-
-    @keyframes popIn {
-      from { transform: scale(0.9); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
-    }
-
-    .login-box h2 {
-      margin-bottom: 18px;
-      color: #ffffff;
-      font-size: 1.6rem;
-      letter-spacing: 0.5px;
-    }
-
-    .login-box input {
-      width: 100%;
-      padding: 13px 14px;
-      margin: 12px 0;
-
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.25);
-
-      background: rgba(255,255,255,0.08);
-      color: #fff;
-
-      outline: none;
-      transition: all 0.25s ease;
-    }
-
-    .login-box input::placeholder {
-      color: rgba(255,255,255,0.6);
-    }
-
-    .login-box input:focus {
-      border-color: #38bdf8;
-      box-shadow: 0 0 0 3px rgba(56,189,248,0.25);
-      background: rgba(255,255,255,0.12);
-    }
-
-    .login-box button {
-      width: 100%;
-      padding: 13px;
-
-      background: linear-gradient(135deg, #2563eb, #1e3a8a);
-      color: white;
-
-      border: none;
-      border-radius: 10px;
-
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 1rem;
-
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .login-box button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(37,99,235,0.4);
-    }
-
-    .login-box button:active {
-      transform: scale(0.98);
-    }
-
-    .login-msg {
-      margin-top: 12px;
-      font-size: 13px;
-      color: #fca5a5;
-      min-height: 18px;
-    }
-
-    /* ================= MAIN UI ================= */
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-      overflow: hidden;
-    }
-
-    header {
-      background: #1e3a8a;
-      color: white;
-      padding: 15px 25px;
-      font-size: 1.5em;
-      font-weight: bold;
-    }
-
+    .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; }
+    header { background: #1e3a8a; color: white; padding: 15px 25px; font-size: 1.5em; font-weight: bold; }
     .main { display: flex; height: calc(100vh - 80px); }
-
-    .sidebar {
-      width: 480px;
-      border-right: 1px solid #ddd;
-      padding: 20px;
-      overflow-y: auto;
-      background: #fafcff;
-    }
-
-    .content {
-      flex: 1;
-      padding: 20px;
-      overflow-y: auto;
-      background: #f8fafc;
-    }
+    .sidebar { width: 480px; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; background: #fafcff; }
+    .content { flex: 1; padding: 20px; overflow-y: auto; background: #f8fafc; }
 
     .form-group { margin-bottom: 15px; }
-
     label { display: block; margin-bottom: 6px; font-weight: 600; color: #333; }
-
-    input {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-    }
+    input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
 
     button {
-      padding: 10px 16px;
-      margin: 5px 2px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
+      padding: 10px 16px; margin: 5px 2px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
     }
-
     .btn-primary { background: #1e3a8a; color: white; }
     .btn-success { background: #15803d; color: white; }
     .btn-download { background: #7c3aed; color: white; padding: 12px 20px; font-size: 1.05em; }
 
     table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-      background: white;
+      width: 100%; border-collapse: collapse; margin-top: 10px; background: white;
       box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
-
     th, td {
-      padding: 12px 10px;
-      text-align: left;
-      border-bottom: 1px solid #ddd;
+      padding: 12px 10px; text-align: left; border-bottom: 1px solid #ddd;
     }
-
     th { background: #1e3a8a; color: white; }
-
     tr:hover { background: #f1f5f9; }
 
-    .status {
-      padding: 10px;
-      border-radius: 6px;
-      margin: 10px 0;
-      font-weight: bold;
-    }
-
+    .status { padding: 10px; border-radius: 6px; margin: 10px 0; font-weight: bold; }
     .success { background: #dcfce7; color: #166534; }
     .error { background: #fee2e2; color: #991b1b; }
-
-    .response {
-      background: #1f2937;
-      color: #e0f2fe;
-      padding: 15px;
-      border-radius: 8px;
-      min-height: 300px;
-      font-family: monospace;
-      white-space: pre-wrap;
-      overflow: auto;
+    .response { 
+      background: #1f2937; color: #e0f2fe; padding: 15px; border-radius: 8px; 
+      min-height: 300px; font-family: monospace; white-space: pre-wrap; overflow: auto; 
     }
   </style>
 </head>
-
 <body>
+  <div class="container">
+    <header>📤 FBR Invoice Sender (Live API)</header>
+    
+    <div class="main">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <h2>FBR API Settings</h2>
+        
+        <div class="form-group">
+          <label>API Endpoint (URL)</label>
+          <input type="text" id="apiUrl" value="https://gw.fbr.gov.pk/imsp/v1/api/Live/PostData" />
+        </div>
+        
+        <div class="form-group">
+          <label>Authorization Token</label>
+          <input type="text" id="apiToken" value="15f0b463-b638-3f63-a671-a799fb380468" />
+        </div>
 
-<!-- ================= LOGIN SCREEN ================= -->
-<div id="loginScreen">
-  <div class="login-box">
-    <h2>🔐 Secure Login</h2>
-    <input type="password" id="loginPassword" placeholder="Enter Password">
-    <button onclick="checkLogin()">Login</button>
-    <div class="login-msg" id="loginMsg"></div>
-  </div>
-</div>
+        <hr style="margin: 20px 0;">
 
-<!-- ================= MAIN APP ================= -->
-<div class="container" id="mainApp" style="display:none;">
-  <header>📤 FBR Invoice Sender (Live API)</header>
+        <h3>📊 Import Excel File</h3>
+        <p><small>Column A = Transaction Number<br>Column B = Full JSON String (Invoice Data)</small></p>
+        
+        <input type="file" id="excelFile" accept=".xlsx,.xls" style="margin:10px 0;" />
+        <button class="btn-success" onclick="processExcel()">Import & Show Table</button>
 
-  <div class="main">
-
-    <!-- Sidebar -->
-    <div class="sidebar">
-      <h2>FBR API Settings</h2>
-
-      <div class="form-group">
-        <label>API Endpoint (URL)</label>
-        <input type="text" id="apiUrl" value="https://gw.fbr.gov.pk/imsp/v1/api/Live/PostData" />
+        <div id="excelStatus" style="margin-top:15px; padding:12px; background:#fef3c7; border-radius:6px; display:none;"></div>
       </div>
 
-      <div class="form-group">
-        <label>Authorization Token</label>
-        <input type="text" id="apiToken" value="15f0b463-b638-3f63-a671-a799fb380468" />
-      </div>
+      <!-- Main Content -->
+      <div class="content">
+        <h2>Imported Records Table</h2>
+        <div id="tableContainer" style="margin-top: 15px;"></div>
 
-      <hr style="margin: 20px 0;">
+        <div style="margin: 25px 0 15px 0;">
+          <button class="btn-download" onclick="downloadRecords()" id="downloadBtn" style="display:none;">
+            📥 Download Complete Records (Excel)
+          </button>
+        </div>
 
-      <h3>📊 Import Excel File</h3>
-      <input type="file" id="excelFile" accept=".xlsx,.xls" style="margin:10px 0;" />
-      <button class="btn-success" onclick="processExcel()">Import & Show Table</button>
+        <h2 style="margin-top: 30px;">FBR API Response / Log</h2>
+        <div id="status" class="status"></div>
+        <pre id="response" class="response">Import Excel file then click Send to FBR...</pre>
 
-      <div id="excelStatus" style="margin-top:15px; padding:12px; background:#fef3c7; border-radius:6px; display:none;"></div>
-    </div>
-
-    <!-- Content -->
-    <div class="content">
-      <h2>Imported Records Table</h2>
-      <div id="tableContainer"></div>
-
-      <div style="margin: 25px 0 15px 0;">
-        <button class="btn-download" onclick="downloadRecords()" id="downloadBtn" style="display:none;">
-          📥 Download Complete Records (Excel)
-        </button>
-      </div>
-
-      <h2>FBR API Response / Log</h2>
-      <div id="status" class="status"></div>
-      <pre id="response" class="response">Waiting...</pre>
-
-      <div style="margin-top: 20px;">
-        <button class="btn-primary" onclick="sendAllToFBR()">
-          🚀 Send All Records to FBR
-        </button>
+        <div style="margin-top: 20px;">
+          <button class="btn-primary" onclick="sendAllToFBR()" style="padding:12px 24px; font-size:1.1em;">
+            🚀 Send All Records to FBR
+          </button>
+        </div>
       </div>
     </div>
-
   </div>
-</div>
 
-<script>
-let allRecords = [];
+  <script>
+    let allRecords = []; 
 
-/* ================= LOGIN LOGIC ================= */
-async function checkLogin() {
-  const input = document.getElementById("loginPassword").value;
-  const msg = document.getElementById("loginMsg");
-
-  if (!input) {
-    msg.innerText = "Enter password!";
-    return;
-  }
-
-  try {
-    const res = await fetch("https://c-ph3r-default-rtdb.firebaseio.com/user.json");
-    const data = await res.json();
-
-    const storedPassword = Object.values(data)[0].password;
-
-    if (input === storedPassword) {
-      document.getElementById("loginScreen").style.display = "none";
-      document.getElementById("mainApp").style.display = "block";
-    } else {
-      msg.innerText = "Wrong password!";
+    function showStatus(msg, type = "") {
+      const statusDiv = document.getElementById("status");
+      statusDiv.textContent = msg;
+      statusDiv.className = `status ${type}`;
     }
 
-  } catch (err) {
-    msg.innerText = "Server error!";
-  }
-}
+    // ==================== PROCESS EXCEL ====================
+    function processExcel() {
+      const file = document.getElementById("excelFile").files[0];
+      if (!file) return alert("Please select an Excel file!");
 
-/* ================= ORIGINAL LOGIC (UNCHANGED) ================= */
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-function showStatus(msg, type = "") {
-  const statusDiv = document.getElementById("status");
-  statusDiv.textContent = msg;
-  statusDiv.className = `status ${type}`;
-}
+          allRecords = [];
+          let html = `
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Transaction Number</th>
+                  <th>Invoice ID / USIN</th>
+                  <th>JSON Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>`;
 
-function processExcel() {
-  const file = document.getElementById("excelFile").files[0];
-  if (!file) return alert("Please select an Excel file!");
+          for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || !row[1]) continue;
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            let transactionNo = row[0] ? row[0].toString().trim() : "N/A";
+            let jsonStr = row[1].toString().trim();
 
-      allRecords = [];
+            let jsonObj = null;
+            let statusText = "❌ Invalid JSON";
+            let usin = "N/A";
 
-      let html = `<table><thead><tr>
-        <th>#</th>
-        <th>Transaction Number</th>
-        <th>Invoice ID / USIN</th>
-        <th>Status</th>
-        <th>Action</th>
-      </tr></thead><tbody>`;
+            try {
+              jsonObj = JSON.parse(jsonStr);
+              statusText = "✅ Valid JSON";
+              usin = jsonObj.USIN || jsonObj.InvoiceNumber || jsonObj.invoiceNumber || "Not Found";
+            } catch (err) {}
 
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || !row[1]) continue;
+            allRecords.push({
+              transactionNo: transactionNo,
+              usin: usin,
+              jsonObj: jsonObj,
+              rowIndex: i + 1,
+              fbrResponse: null,
+              fbrInvoiceNumber: null   // New field for invoice number from response
+            });
 
-        let transactionNo = row[0];
-        let jsonObj = JSON.parse(row[1]);
+            html += `
+              <tr>
+                <td>${i}</td>
+                <td><strong>${transactionNo}</strong></td>
+                <td>${usin}</td>
+                <td>${statusText}</td>
+                <td><button onclick="viewJson(${allRecords.length - 1})" style="padding:5px 10px; font-size:0.85em;">View JSON</button></td>
+              </tr>`;
+          }
 
-        allRecords.push({
-          transactionNo,
-          jsonObj,
-          fbrResponse: null,
-          fbrInvoiceNumber: null
-        });
+          html += `</tbody></table>`;
+          document.getElementById("tableContainer").innerHTML = html;
+          document.getElementById("excelStatus").style.display = "block";
+          document.getElementById("excelStatus").innerHTML = `✅ <b>${allRecords.length}</b> records loaded successfully`;
 
-        html += `<tr>
-          <td>${i}</td>
-          <td>${transactionNo}</td>
-          <td>${jsonObj.USIN || "N/A"}</td>
-          <td>Loaded</td>
-          <td><button onclick="viewJson(${i-1})">View</button></td>
-        </tr>`;
+          showStatus(`${allRecords.length} records ready to send to FBR`, "success");
+          document.getElementById("downloadBtn").style.display = "inline-block";
+
+        } catch (err) {
+          alert("Error reading Excel: " + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function viewJson(index) {
+      const record = allRecords[index];
+      if (!record || !record.jsonObj) return;
+      const pretty = JSON.stringify(record.jsonObj, null, 2);
+      document.getElementById("response").textContent = 
+        `Transaction: ${record.transactionNo}\nInvoice ID: ${record.usin}\n\n${pretty}`;
+    }
+
+    // ==================== DOWNLOAD RECORDS AS EXCEL ====================
+    function downloadRecords() {
+      if (allRecords.length === 0) return alert("No records to download!");
+
+      const exportData = allRecords.map((r, i) => ({
+        "Sr No": i + 1,
+        "Transaction Number": r.transactionNo,
+        "Original Invoice / USIN": r.usin,
+        "FBR Invoice Number": r.fbrInvoiceNumber || "Not Received",   // New Column
+        "FBR Response": r.fbrResponse || "Not Sent",
+        "Status": r.jsonObj ? "Valid JSON" : "Invalid JSON",
+        "Row in Original Excel": r.rowIndex
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "FBR_Invoice_Records");
+
+      const wscols = [
+        {wch:8}, {wch:20}, {wch:25}, {wch:25}, 
+        {wch:40}, {wch:15}, {wch:18}
+      ];
+      ws['!cols'] = wscols;
+
+      XLSX.writeFile(wb, `FBR_Invoice_Records_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    // ==================== SEND TO FBR API ====================
+    async function sendAllToFBR() {
+      if (allRecords.length === 0) return alert("No records to send!");
+
+      const apiUrl = document.getElementById("apiUrl").value.trim();
+      const token = document.getElementById("apiToken").value.trim();
+
+      if (!apiUrl || !token) {
+        alert("API URL and Token are required!");
+        return;
       }
 
-      html += `</tbody></table>`;
-      document.getElementById("tableContainer").innerHTML = html;
+      const responseDiv = document.getElementById("response");
+      responseDiv.textContent = "🚀 Sending records to FBR Live API...\n\n";
 
-    } catch (err) {
-      alert("Error reading Excel: " + err.message);
+      let successCount = 0;
+
+      for (let i = 0; i < allRecords.length; i++) {
+        const record = allRecords[i];
+        if (!record.jsonObj) {
+          responseDiv.textContent += `❌ Row ${record.rowIndex} - Invalid JSON\n`;
+          continue;
+        }
+
+        responseDiv.textContent += `Sending ${i+1}/${allRecords.length} → Transaction: ${record.transactionNo} | Invoice: ${record.usin}\n`;
+
+        try {
+          const res = await fetch(apiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(record.jsonObj)
+          });
+
+          const resultText = await res.text();
+          let result;
+          try {
+            result = JSON.parse(resultText);
+          } catch (e) {
+            result = resultText;
+          }
+
+          // Extract Invoice Number from FBR Response
+          let fbrInvoiceNo = null;
+          if (result && typeof result === 'object') {
+            fbrInvoiceNo = result.InvoiceNumber || result.invoiceNumber || 
+                          result.USIN || result.fbrInvoiceNumber || 
+                          result.invoiceNo || null;
+          }
+
+          record.fbrResponse = res.ok ? "Success" : "Failed";
+          record.fbrInvoiceNumber = fbrInvoiceNo;
+
+          if (res.ok) {
+            successCount++;
+            responseDiv.textContent += `   ✅ Success → Invoice: ${fbrInvoiceNo || "N/A"} | ${JSON.stringify(result).slice(0, 120)}...\n`;
+          } else {
+            responseDiv.textContent += `   ❌ Failed (HTTP ${res.status}) → ${resultText.slice(0, 200)}\n`;
+          }
+        } catch (err) {
+          record.fbrResponse = "Error";
+          responseDiv.textContent += `   ❌ Network Error: ${err.message}\n`;
+        }
+
+        await new Promise(r => setTimeout(r, 800)); // Delay
+      }
+
+      showStatus(`✅ ${successCount} out of ${allRecords.length} records sent to FBR`, "success");
+      responseDiv.textContent += `\n\n🎉 Process Completed! Total Successful: ${successCount}`;
     }
-  };
-
-  reader.readAsArrayBuffer(file);
-}
-
-function viewJson(i) {
-  document.getElementById("response").textContent =
-    JSON.stringify(allRecords[i].jsonObj, null, 2);
-}
-
-async function sendAllToFBR() {
-  alert("Your existing API logic remains here (unchanged).");
-}
-
-function downloadRecords() {
-  alert("Download logic remains unchanged.");
-}
-</script>
-
+  </script>
 </body>
 </html>
